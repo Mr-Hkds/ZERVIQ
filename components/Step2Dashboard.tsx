@@ -327,13 +327,21 @@ const Step2Dashboard = React.memo((props: Step2DashboardProps) => {
         analysis.questions.filter(q =>
             q.type === QuestionType.MULTIPLE_CHOICE ||
             q.type === QuestionType.CHECKBOXES ||
-            q.type === QuestionType.DROPDOWN
+            q.type === QuestionType.DROPDOWN ||
+            q.type === QuestionType.LINEAR_SCALE ||
+            q.type === QuestionType.GRID
         ), [analysis.questions]);
 
     const textQuestions = useMemo(() =>
         analysis.questions.filter(q =>
-            (q.type === QuestionType.SHORT_ANSWER || q.type === QuestionType.PARAGRAPH) &&
-            !q.title.toLowerCase().includes('name')
+            q.type === QuestionType.SHORT_ANSWER || q.type === QuestionType.PARAGRAPH
+        ), [analysis.questions]);
+
+    const otherQuestions = useMemo(() =>
+        analysis.questions.filter(q =>
+            q.type === QuestionType.DATE ||
+            q.type === QuestionType.TIME ||
+            q.type === QuestionType.UNKNOWN
         ), [analysis.questions]);
 
     const goNext = useCallback(() => setWizardStep(prev => Math.min(prev + 1, 4) as 1 | 2 | 3 | 4), []);
@@ -621,7 +629,23 @@ const Step2Dashboard = React.memo((props: Step2DashboardProps) => {
                         </div>
                     )}
 
-                    {optionQuestions.length === 0 && textQuestions.length === 0 && (
+                    {/* Date / Time / Other fields */}
+                    {otherQuestions.length > 0 && (
+                        <div className="mt-6 space-y-2">
+                            <p className="text-[10px] text-slate-600 uppercase tracking-[0.15em] font-bold px-1 mb-3 font-mono">Other Fields</p>
+                            {otherQuestions.map(q => (
+                                <div key={q.id} className="glass-panel rounded-xl p-4">
+                                    <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2">
+                                        {q.required && <span className="text-amber-500 text-sm">●</span>}
+                                        {q.title}
+                                    </h4>
+                                    <p className="text-[11px] text-slate-600 mt-1.5 italic">Auto-generated {q.type === QuestionType.DATE ? 'dates' : q.type === QuestionType.TIME ? 'times' : 'responses'} will be used</p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {optionQuestions.length === 0 && textQuestions.length === 0 && otherQuestions.length === 0 && (
                         <div className="text-center py-16">
                             <CheckCircle className="w-8 h-8 mx-auto mb-3 text-amber-500/40" />
                             <p className="text-sm text-slate-500">All fields use default distributions.</p>
