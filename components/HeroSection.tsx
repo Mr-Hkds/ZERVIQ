@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowRight, Sparkles, Zap, Gift, Play, ShieldCheck, Laptop, Clipboard, Terminal, Command, Crown } from 'lucide-react';
+import { ArrowRight, Sparkles, Zap, Gift, Play, ShieldAlert, Laptop, Clipboard, Terminal, Command, Crown, ShieldCheck } from 'lucide-react';
 
 interface HeroSectionProps {
     url: string;
@@ -15,6 +15,24 @@ interface HeroSectionProps {
 const HeroSection: React.FC<HeroSectionProps> = React.memo(({ url, setUrl, onAnalyze, onWatchDemo, loading, version, user, onShowPricing }) => {
     return (
         <section className="flex-1 flex flex-col items-center justify-center w-full max-w-[100vw] overflow-hidden animate-fade-in-up px-4 sm:px-6 relative z-10 min-h-[85vh] py-20 md:py-32">
+
+            {/* 🛡️ PREMIUM ELITE WARNING BADGE */}
+            <div className="w-full flex justify-center mb-8 animate-fade-in-up px-4">
+                <div className="relative group inline-flex items-center gap-2.5 px-4 py-2 rounded-full border border-red-500/20 bg-red-500/[0.02] backdrop-blur-md transition-all duration-300 hover:bg-red-500/[0.05] hover:border-red-500/30">
+
+                    {/* Pulsing Highlight Glow */}
+                    <div className="absolute inset-0 rounded-full bg-red-500/[0.05] shadow-[0_0_20px_-3px_rgba(239,68,68,0.2)] animate-[pulse_3s_ease-in-out_infinite] pointer-events-none" />
+
+                    <ShieldAlert className="w-3.5 h-3.5 text-red-500/90 relative z-10" />
+                    <p className="text-[11px] md:text-xs font-mono text-slate-300 relative z-10">
+                        <span className="font-bold tracking-[0.1em] text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-red-300 to-red-500 bg-[length:200%_auto] animate-text-shimmer uppercase">
+                            Warning
+                        </span>
+                        <span className="mx-2.5 text-red-500/30">│</span>
+                        Use only on your own forms. Spamming will result in immediate termination and IP ban.
+                    </p>
+                </div>
+            </div>
 
             {/* Background Ambience */}
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-amber-500/5 rounded-full blur-[120px] pointer-events-none opacity-50 mix-blend-screen animate-pulse-slow" />
@@ -195,6 +213,8 @@ const HeroSection: React.FC<HeroSectionProps> = React.memo(({ url, setUrl, onAna
                             </span>
                         </div>
                     </div>
+
+
                 </div>
 
 

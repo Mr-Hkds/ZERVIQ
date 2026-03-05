@@ -1412,6 +1412,31 @@ function App() {
                         }
                     } else if (q.options.length > 0) {
                         value = q.options[0].value;
+                    } else if ((q.type === 'SHORT_ANSWER' || q.type === 'PARAGRAPH') && q.required) {
+                        // FALLBACK: Required text fields that aren't name/email/phone
+                        // Use aiTextSuggestions if available, otherwise generate a placeholder
+                        if (q.aiTextSuggestions && q.aiTextSuggestions.length > 0) {
+                            value = q.aiTextSuggestions[i % q.aiTextSuggestions.length];
+                        } else {
+                            // Generate contextual fallback based on question title keywords
+                            const titleLower = q.title.toLowerCase();
+                            if (/city|town|place|location|area|district|state|country|address|pin.?code|zip/i.test(titleLower)) {
+                                const cities = ['Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Chennai', 'Kolkata', 'Pune', 'Ahmedabad', 'Jaipur', 'Lucknow', 'Kochi', 'Chandigarh', 'Indore', 'Bhopal', 'Nagpur'];
+                                value = cities[i % cities.length];
+                            } else if (/college|university|institute|school|organisation|organization|company|firm/i.test(titleLower)) {
+                                const institutions = ['Delhi University', 'Mumbai University', 'IIT Delhi', 'Anna University', 'Bangalore University', 'Pune University', 'BITS Pilani', 'VIT Vellore', 'SRM University', 'Amity University'];
+                                value = institutions[i % institutions.length];
+                            } else if (/department|branch|stream|course|subject|field|specialization|major/i.test(titleLower)) {
+                                const departments = ['Computer Science', 'Electronics', 'Mechanical', 'Civil', 'Commerce', 'Arts', 'Science', 'Management', 'Law', 'Medicine'];
+                                value = departments[i % departments.length];
+                            } else if (/year|semester|batch|roll|reg/i.test(titleLower)) {
+                                value = String(2020 + (i % 6));
+                            } else {
+                                // Generic fallback — short meaningful response
+                                const genericResponses = ['Good', 'Satisfactory', 'Yes', 'Agreed', 'N/A', 'No comment', 'Fine', 'Okay', 'Acceptable', 'Noted'];
+                                value = genericResponses[i % genericResponses.length];
+                            }
+                        }
                     }
 
                     if (value) submissionData[q.entryId] = value;

@@ -613,8 +613,30 @@ export const generateAutomationScript = (
                  val = prefix + tail;
              }
              
-             // 5. SKIP ALL OTHER TEXT FIELDS
-             // If no custom response and not a name/email/phone field, leave blank
+             // 5. OTHER TEXT FIELDS: Use AI suggestions or contextual fallback for required fields
+             if (!val && question && question.suggestions && question.suggestions.length > 0) {
+                 val = question.suggestions[runIndex % question.suggestions.length];
+             }
+             
+             // 6. REQUIRED FIELD FALLBACK: Generate contextual response if still empty and field is required
+             if (!val && isRequired) {
+                 const titleLower = itemTitleRaw.toLowerCase();
+                 if (/city|town|place|location|area|district|state|country|address|pin.?code|zip/i.test(titleLower)) {
+                     const cities = ['Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Chennai', 'Kolkata', 'Pune', 'Ahmedabad', 'Jaipur', 'Lucknow', 'Kochi', 'Chandigarh', 'Indore', 'Bhopal', 'Nagpur'];
+                     val = cities[runIndex % cities.length];
+                 } else if (/college|university|institute|school|organisation|organization|company|firm/i.test(titleLower)) {
+                     const institutions = ['Delhi University', 'Mumbai University', 'IIT Delhi', 'Anna University', 'Bangalore University', 'Pune University', 'BITS Pilani', 'VIT Vellore', 'SRM University', 'Amity University'];
+                     val = institutions[runIndex % institutions.length];
+                 } else if (/department|branch|stream|course|subject|field|specialization|major/i.test(titleLower)) {
+                     const departments = ['Computer Science', 'Electronics', 'Mechanical', 'Civil', 'Commerce', 'Arts', 'Science', 'Management', 'Law', 'Medicine'];
+                     val = departments[runIndex % departments.length];
+                 } else if (/year|semester|batch|roll|reg/i.test(titleLower)) {
+                     val = String(2020 + (runIndex % 6));
+                 } else {
+                     const genericResponses = ['Good', 'Satisfactory', 'Yes', 'Agreed', 'N/A', 'No comment', 'Fine', 'Okay', 'Acceptable', 'Noted'];
+                     val = genericResponses[runIndex % genericResponses.length];
+                 }
+             }
 
 
              if (val) {
