@@ -121,7 +121,16 @@ export function loadFormConfig(url: string): SavedFormConfig | null {
     try {
         const raw = localStorage.getItem(STORAGE_PREFIX + key);
         if (!raw) return null;
-        return JSON.parse(raw) as SavedFormConfig;
+        const config = JSON.parse(raw) as SavedFormConfig;
+
+        // 24 hour expiration check
+        const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+        if (Date.now() - config.savedAt > TWENTY_FOUR_HOURS) {
+            clearFormConfig(key);
+            return null;
+        }
+
+        return config;
     } catch {
         return null;
     }

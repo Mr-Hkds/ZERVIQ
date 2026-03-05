@@ -58,9 +58,11 @@ export default function AIWeightageBridge({ questions, onApplyWeightages, onClos
 
         const prompt = `You are a statistical data analyst creating REALISTIC survey response distributions for a form titled "${questions[0]?.title || 'Survey'}".
 
-I will provide a JSON array of questions. Your job is to assign weight distributions and text samples that look like REAL human responses.
+I will provide a JSON array of questions. Your job is to:
+1. Assign weight distributions and text samples that look like REAL human responses.
+2. Formulate logical constraint rules across questions (e.g. students shouldn't have high income).
 
-CORE RULES:
+CORE RULES FOR WEIGHTS/SAMPLES:
 1. For options (MULTIPLE_CHOICE, CHECKBOXES, DROPDOWN): Assign weight percentages that sum EXACTLY to 100 per question. Use realistic bell-curve distributions — true surveys aren't evenly spread.
 2. For text (SHORT_ANSWER, PARAGRAPH): Provide 8-12 diverse sample responses. Mix short and long phrasing. Add natural imperfections.
 3. If it's a "Name" field, provide realistic full names.
@@ -69,13 +71,36 @@ CORE RULES:
 6. Don't give any option exactly 0% weight.
 ${isIndianContext ? '7. Context is INDIA. Use Indian names, Rupee (₹) income logic, and Indian demographics.' : ''}
 
-OUTPUT FORMAT:
-Return ONLY a valid JSON array of objects:
-- 'id': (string) the original question id
-- 'options': (array of objects, ONLY for selection fields) { "value": string, "weight": number }
-- 'samples': (array of strings, ONLY for text fields) diverse realistic responses
+CORE RULES FOR CONSTRAINTS:
+1. Think deeply about the questions. Does age restrict occupation? Does occupation restrict income?
+2. Create rules that map specific options from one question to allowed/blocked options in another.
+3. Don't be too restrictive; only block obviously impossible/unlikely combinations.
+4. The constraints will be used at runtime to fix bad combinations.
 
-No markdown code blocks, no explanation, no intro text. Just the raw JSON array.
+OUTPUT FORMAT:
+Return ONLY a valid JSON object with TWO keys: "questions" and "constraints".
+
+{
+  "questions": [
+    {
+      "id": "question_id_here",
+      "options": [ { "value": "Option 1", "weight": 60 }, ... ],
+      "samples": [ "Sample response 1", ... ]
+    }
+  ],
+  "constraints": [
+    {
+      "id": "unique_rule_name",
+      "description": "Short explanation of the rule",
+      "sourceQuestionId": "question_id_here",
+      "sourceClasses": ["Exact string match of the trigger option(s)"],
+      "targetQuestionId": "dependent_question_id_here",
+      "blockedClasses": ["Exact string match of the options to BLOCK if trigger matches"]
+    }
+  ]
+}
+
+No markdown code blocks, no explanation, no intro text. Just the raw JSON object.
 
 ${JSON.stringify(promptData, null, 2)}`;
 
@@ -104,10 +129,15 @@ ${JSON.stringify(promptData, null, 2)}`;
             const cleanedText = rawText.replace(/```json\n?/gi, '').replace(/```/g, '').trim();
 
             // Attempt parse
-            const parsedData = JSON.parse(cleanedText);
+            let parsedData = JSON.parse(cleanedText);
 
-            if (!Array.isArray(parsedData)) {
-                throw new Error('Expected an array of questions');
+            // Backwards compatibility if AI outputs just the array
+            if (Array.isArray(parsedData)) {
+                parsedData = { questions: parsedData, constraints: [] };
+            }
+
+            if (!parsedData || !Array.isArray(parsedData.questions)) {
+                throw new Error('Expected an object with a questions array');
             }
 
             // Store the parsed data to be confirmed by the user
@@ -241,7 +271,7 @@ ${JSON.stringify(promptData, null, 2)}`;
                                         <div className="absolute inset-0 bg-white/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
                                         <CheckCircle className="w-5 h-5 text-white" />
                                         <span className="font-bold text-white uppercase tracking-wider text-sm">
-                                            Inject {parsedData.length} Valid Configurations
+                                            Inject {parsedData.questions?.length || 0} Configurations
                                         </span>
                                     </button>
                                 </div>

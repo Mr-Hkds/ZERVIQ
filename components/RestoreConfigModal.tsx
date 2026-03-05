@@ -1,11 +1,12 @@
 import React from 'react';
-import { History, RotateCcw, Sparkles, X, Clock, Target, Zap } from 'lucide-react';
+import { History, RotateCcw, Sparkles, X, Clock, Target, Zap, Trash2 } from 'lucide-react';
 import { SavedFormConfig } from '../utils/formHistory';
 
 interface RestoreConfigModalProps {
     config: SavedFormConfig;
     onRestore: () => void;
     onStartFresh: () => void;
+    onDelete: () => void;
 }
 
 function timeAgo(timestamp: number): string {
@@ -20,7 +21,7 @@ function timeAgo(timestamp: number): string {
     return new Date(timestamp).toLocaleDateString();
 }
 
-const RestoreConfigModal: React.FC<RestoreConfigModalProps> = ({ config, onRestore, onStartFresh }) => {
+const RestoreConfigModal: React.FC<RestoreConfigModalProps> = ({ config, onRestore, onStartFresh, onDelete }) => {
     const weightCount = Object.keys(config.questionWeights).length;
 
     return (
@@ -125,6 +126,15 @@ const RestoreConfigModal: React.FC<RestoreConfigModalProps> = ({ config, onResto
                             >
                                 <History className="w-3.5 h-3.5" />
                                 Restore
+                            </button>
+                        </div>
+                        <div className="mt-3">
+                            <button
+                                onClick={onDelete}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:text-red-300 hover:bg-red-500/20 transition-all duration-200 active:scale-95 text-xs font-bold uppercase tracking-wider"
+                            >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Delete History
                             </button>
                         </div>
                     </div>

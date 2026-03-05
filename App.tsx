@@ -27,7 +27,7 @@ import MatrixReveal from './components/MatrixReveal';
 import Step2Dashboard from './components/Step2Dashboard';
 import RestoreConfigModal from './components/RestoreConfigModal';
 import TokenModal from './components/TokenModal';
-import { saveFormConfig, loadFormConfig, SavedFormConfig } from './utils/formHistory';
+import { saveFormConfig, loadFormConfig, clearFormConfig, SavedFormConfig } from './utils/formHistory';
 
 // --- VISUAL COMPONENTS ---
 
@@ -482,6 +482,9 @@ function App() {
     // Form History State
     const [savedConfig, setSavedConfig] = useState<SavedFormConfig | null>(null);
     const [showRestoreModal, setShowRestoreModal] = useState(false);
+
+    // Constraint UI State
+    const [constraintsEnabled, setConstraintsEnabled] = useState(true);
 
     // AUTOMATION STATE
     const [isAutoRunning, setIsAutoRunning] = useState(false);
@@ -982,7 +985,8 @@ function App() {
                 delayMax: delayMin + 500,
                 names: namesToUse,
                 nameSource,
-                customFieldResponses: processedCustomResponses
+                customFieldResponses: processedCustomResponses,
+                constraintsEnabled
             }, url, token);
 
             await navigator.clipboard.writeText(script);
@@ -1366,6 +1370,20 @@ function App() {
             for (let i = 0; i < targetCount; i++) {
                 const submissionData: Record<string, string | string[]> = { ...(analysis.hiddenFields || {}) };
 
+                // 1. Generate Deterministic Identity for this response index
+                const nameItem = namesToUse.length > 0 ? namesToUse[i % namesToUse.length] : "Auto User";
+                const cleanName = nameItem.toLowerCase().replace(/[^a-z0-9]/g, '.');
+                const domains = ['gmail.com', 'yahoo.com', 'outlook.com', 'icloud.com'];
+                // Use a seeded value for consistency if name repeats
+                const seed = i + (nameItem.length * 7);
+                const randomNum = (seed * 13) % 100;
+                const domain = domains[seed % domains.length];
+                const identity = {
+                    name: nameItem,
+                    email: `${cleanName}${randomNum}@${domain}`,
+                    phone: `9${((seed * 157) % 1000000000).toString().padStart(9, '0')}`
+                };
+
                 analysis.questions.forEach(q => {
                     let value: string | string[] = "";
 
@@ -1373,14 +1391,11 @@ function App() {
                         const arr = processedCustomResponses[q.id];
                         value = arr[i % arr.length];
                     } else if (isPersonalName(q.title) && (q.type === 'SHORT_ANSWER' || q.type === 'PARAGRAPH')) {
-                        value = namesToUse.length > 0 ? namesToUse[i % namesToUse.length] : "Auto User";
+                        value = identity.name;
                     } else if (isPersonalEmail(q.title) && (q.type === 'SHORT_ANSWER' || q.type === 'PARAGRAPH')) {
-                        const name = namesToUse.length > 0 ? namesToUse[i % namesToUse.length].toLowerCase().replace(/\s+/g, '.') : `user${i}`;
-                        const domains = ['gmail.com', 'yahoo.com', 'outlook.com', 'icloud.com'];
-                        value = `${name}${Math.floor(Math.random() * 99)}@${domains[Math.floor(Math.random() * domains.length)]}`;
+                        value = identity.email;
                     } else if (isPhoneQuestion(q.title) && (q.type === 'SHORT_ANSWER' || q.type === 'PARAGRAPH')) {
-                        const prefix = ['9', '8', '7', '6'][Math.floor(Math.random() * 4)];
-                        value = prefix + Math.floor(Math.random() * 1000000000).toString().padStart(9, '0');
+                        value = identity.phone;
                     } else if (questionDecks[q.id]) {
                         if (q.type === 'CHECKBOXES') {
                             const primaryChoice = questionDecks[q.id][i] || q.options[0].value;
@@ -1403,8 +1418,7 @@ function App() {
                 });
 
                 if (!submissionData['emailAddress']) {
-                    const name = namesToUse.length > 0 ? namesToUse[i % namesToUse.length].toLowerCase().replace(/\s+/g, '.') : `user${i}`;
-                    submissionData['emailAddress'] = `${name}${Math.floor(Math.random() * 99)}@gmail.com`;
+                    submissionData['emailAddress'] = identity.email;
                 }
 
                 // Pre-submission validation: Ensure required fields have valid values
@@ -1756,6 +1770,15 @@ function App() {
                         setShowRestoreModal(false);
                         setSavedConfig(null);
                     }}
+                    onDelete={() => {
+                        if (savedConfig) {
+                            clearFormConfig(savedConfig.formUrl);
+                        }
+                        setDashboardInitialStep(1);
+                        setDashboardAiApplied(false);
+                        setShowRestoreModal(false);
+                        setSavedConfig(null);
+                    }}
                 />
             )}
 
@@ -1984,6 +2007,8 @@ function App() {
                                         initialWizardStep={dashboardInitialStep}
                                         initialAiApplied={dashboardAiApplied}
                                         onAiAppliedChange={setDashboardAiApplied}
+                                        constraintsEnabled={constraintsEnabled}
+                                        setConstraintsEnabled={setConstraintsEnabled}
                                     />
                                 )}
 

@@ -28,13 +28,37 @@ export interface FormQuestion {
   aiTextSuggestions?: string[];
 }
 
+export interface FieldConstraint {
+  id: string;
+  description: string;
+  sourceQuestionId: string;
+  sourceCategory: string;
+  sourceClasses: string[];
+  targetQuestionId: string;
+  targetCategory: string;
+  blockedClasses: string[];
+}
+
+export interface ClassifiedQuestion {
+  questionId: string;
+  title: string;
+  category: string;
+  options: Array<{
+    value: string;
+    weight: number;
+    optionClass: string;
+  }>;
+}
+
 export interface FormAnalysis {
   title: string;
   description: string;
   questions: FormQuestion[];
   aiReasoning: string;
-  hiddenFields?: Record<string, string>; // Added for submitting hidden inputs like fbzx
-  targetCount?: number; // Added to persist target count through analysis
+  hiddenFields?: Record<string, string>;
+  targetCount?: number;
+  constraints?: FieldConstraint[];
+  classifiedQuestions?: ClassifiedQuestion[];
 }
 
 export interface ScriptConfig {
@@ -44,6 +68,7 @@ export interface ScriptConfig {
   names?: string[]; // Added for Gold Edition logic
   nameSource?: 'auto' | 'indian' | 'custom';
   customFieldResponses?: Record<string, string[]>; // Map question ID to array of custom answers
+  constraintsEnabled?: boolean;
 }
 
 export interface User {

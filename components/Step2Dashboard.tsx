@@ -2,7 +2,8 @@ import React, { useMemo, useCallback, useState, useRef, useEffect } from 'react'
 import {
     ArrowLeft, ArrowRight, AlertCircle, Target, ShieldCheck,
     Zap, Sparkles, CheckCircle, Rocket, Sliders, ChevronDown,
-    Edit3, RotateCcw, ChevronsUpDown, Bot, Wrench
+    Edit3, RotateCcw, ChevronsUpDown, Bot, Wrench,
+    AlignLeft, PenLine, Calendar, Info, Package
 } from 'lucide-react';
 import { FormAnalysis, FormQuestion, QuestionType, User } from '../types';
 import AIWeightageBridge from './AIWeightageBridge';
@@ -34,6 +35,8 @@ interface Step2DashboardProps {
     initialWizardStep?: 1 | 2 | 3 | 4;
     initialAiApplied?: boolean;
     onAiAppliedChange?: (applied: boolean) => void;
+    constraintsEnabled: boolean;
+    setConstraintsEnabled: (enabled: boolean) => void;
 }
 
 // ─── GOLD PALETTE COLORS ────────────────────────────────────────────
@@ -94,7 +97,7 @@ const StepIndicator = ({ current, onStepClick }: { current: number; onStepClick?
 const MiniStackedBar = ({ options }: { options: { value: string; weight?: number }[] }) => {
     const sorted = [...options].sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0));
     return (
-        <div className="flex h-1.5 rounded-full overflow-hidden bg-white/[0.04] w-24">
+        <div className="flex h-2 rounded-full overflow-hidden bg-white/[0.04] w-28 border border-white/[0.05] shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]">
             {sorted.map((opt, i) => {
                 const w = opt.weight ?? 0;
                 if (w <= 0) return null;
@@ -105,12 +108,59 @@ const MiniStackedBar = ({ options }: { options: { value: string; weight?: number
                         className="h-full transition-all duration-300"
                         style={{
                             width: `${w}%`,
-                            backgroundColor: color,
-                            opacity: 0.5 + (0.5 * (1 - i / Math.max(sorted.length, 1)))
+                            background: `linear-gradient(to bottom, ${color}CC, ${color})`,
+                            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1)'
                         }}
+                        title={`${opt.value}: ${w}%`}
                     />
                 );
             })}
+        </div>
+    );
+};
+
+// ─── DISTRIBUTION BAR (expanded view) ──────────────────────────────
+const DistributionBar = ({ options }: { options: { value: string; weight?: number }[] }) => {
+    const sorted = [...options].sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0));
+    return (
+        <div className="space-y-3 mb-6">
+            <div className="flex justify-between items-end mb-1 px-1">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Global Distribution</span>
+                <span className="text-[10px] font-mono font-bold text-amber-500/80">100% RELATIVE</span>
+            </div>
+            <div className="flex h-5 rounded-xl overflow-hidden bg-black/40 border border-white/[0.06] shadow-2xl p-0.5">
+                {sorted.map((opt, i) => {
+                    const w = opt.weight ?? 0;
+                    if (w <= 0) return null;
+                    const color = GOLD_COLORS[i % GOLD_COLORS.length];
+                    return (
+                        <div
+                            key={i}
+                            className="h-full first:rounded-l-[9px] last:rounded-r-[9px] transition-all duration-500 ease-out group relative"
+                            style={{
+                                width: `${w}%`,
+                                background: `linear-gradient(180deg, ${color}dd, ${color})`,
+                                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.2), 0 0 15px ${color}22`
+                            }}
+                        >
+                            {/* Hover Tooltip */}
+                            <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 border border-amber-500/30 px-2 py-1 rounded text-[9px] font-bold text-white whitespace-nowrap z-10 pointer-events-none">
+                                {opt.value}: {w}%
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+            {/* Top 3 Legend */}
+            <div className="flex gap-4 px-1 overflow-x-auto no-scrollbar py-1">
+                {sorted.slice(0, 4).map((opt, i) => (
+                    <div key={i} className="flex items-center gap-2 flex-shrink-0">
+                        <div className="w-2 h-2 rounded-full shadow-[0_0_8px_rgba(212,175,55,0.3)]" style={{ backgroundColor: GOLD_COLORS[i % GOLD_COLORS.length] }} />
+                        <span className="text-[10px] font-medium text-slate-400 capitalize truncate max-w-[80px]">{opt.value.toLowerCase()}</span>
+                        <span className="text-[10px] font-mono font-bold text-slate-300">{opt.weight ?? 0}%</span>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 };
@@ -162,7 +212,9 @@ const Step2Dashboard = React.memo((props: Step2DashboardProps) => {
         isLaunching, error,
         initialWizardStep = 1,
         initialAiApplied = false,
-        onAiAppliedChange
+        onAiAppliedChange,
+        constraintsEnabled,
+        setConstraintsEnabled
     } = props;
 
     const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(initialWizardStep);
@@ -201,11 +253,14 @@ const Step2Dashboard = React.memo((props: Step2DashboardProps) => {
     }, [wizardStep, setupMode]);
 
     // AI apply callback
-    const handleApplyAIWeightages = useCallback((combinedData: any[]) => {
+    const handleApplyAIWeightages = useCallback((payload: any) => {
+        const aiQuestions = Array.isArray(payload) ? payload : (payload.questions || []);
+        const aiConstraints = payload.constraints || [];
+
         setAnalysis(prev => {
             if (!prev) return prev;
             const newQuestions = [...prev.questions];
-            combinedData.forEach(aiItem => {
+            aiQuestions.forEach((aiItem: any) => {
                 const qIndex = newQuestions.findIndex(q => q.id === aiItem.id);
                 if (qIndex === -1) return;
                 if (aiItem.options && Array.isArray(aiItem.options)) {
@@ -225,11 +280,29 @@ const Step2Dashboard = React.memo((props: Step2DashboardProps) => {
                     }));
                 }
             });
-            return { ...prev, questions: newQuestions };
+
+            const mergedConstraints = [...(prev.constraints || [])];
+            for (const aiC of aiConstraints) {
+                if (!mergedConstraints.some((c: any) => c.id === aiC.id)) {
+                    mergedConstraints.push({
+                        id: aiC.id,
+                        description: aiC.description || 'AI Generated Rule',
+                        sourceQuestionId: aiC.sourceQuestionId,
+                        sourceCategory: 'unknown',
+                        sourceClasses: aiC.sourceClasses || [],
+                        targetQuestionId: aiC.targetQuestionId,
+                        targetCategory: 'unknown',
+                        blockedClasses: aiC.blockedClasses || []
+                    });
+                }
+            }
+
+            return { ...prev, questions: newQuestions, constraints: mergedConstraints };
         });
         setAiApplied(true);
         if (onAiAppliedChange) onAiAppliedChange(true);
         setWizardStep(2);
+        setSetupMode(null);
     }, [setAnalysis, setCustomResponses, onAiAppliedChange]);
 
     // Smart weight redistribution
@@ -487,7 +560,28 @@ const Step2Dashboard = React.memo((props: Step2DashboardProps) => {
 
                     {/* Toolbar: Expand All + Reset visible in review */}
                     {optionQuestions.length > 0 && (
-                        <div className="flex items-center justify-end gap-2 mb-4">
+                        <div className="flex items-center justify-between mb-4">
+                            {/* Constraints Toggle */}
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={() => setConstraintsEnabled(!constraintsEnabled)}
+                                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:ring-offset-2 focus:ring-offset-black ${constraintsEnabled ? 'bg-amber-500' : 'bg-white/10'}`}
+                                >
+                                    <span className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${constraintsEnabled ? 'translate-x-2' : '-translate-x-2'}`} />
+                                </button>
+                                <div>
+                                    <div className="flex items-center gap-1.5">
+                                        <Bot className={`w-3.5 h-3.5 ${constraintsEnabled ? 'text-amber-400' : 'text-slate-500'}`} />
+                                        <span className={`text-[10px] font-bold uppercase tracking-wider ${constraintsEnabled ? 'text-amber-400' : 'text-slate-500'}`}>Smart Constraints</span>
+                                    </div>
+                                    <p className="text-[9px] text-slate-500 mt-0.5">
+                                        {constraintsEnabled && analysis.constraints && analysis.constraints.length > 0
+                                            ? `${analysis.constraints.length} logical rules active`
+                                            : constraintsEnabled ? 'Analyzed (0 rules needed)' : 'Logic engine disabled'}
+                                    </p>
+                                </div>
+                            </div>
+
                             <button
                                 onClick={toggleAll}
                                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06] text-slate-500 hover:text-white hover:border-white/10 transition-all active:scale-95 text-[10px] font-bold uppercase tracking-wider"
@@ -551,43 +645,58 @@ const Step2Dashboard = React.memo((props: Step2DashboardProps) => {
                                         {/* Expanded sliders */}
                                         {isOpen && (
                                             <div className="px-5 pb-5 animate-fade-in-up" style={{ animationDuration: '250ms' }}>
+                                                <DistributionBar options={q.options} />
+
                                                 <div className="flex items-center justify-between mb-4">
                                                     <div className="h-px flex-1 bg-white/[0.04]" />
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); resetToEqual(q.id); }}
-                                                        className="flex items-center gap-1.5 ml-3 px-2.5 py-1 rounded-md bg-white/[0.03] border border-white/[0.06] text-slate-500 hover:text-amber-400 hover:border-amber-500/20 transition-all active:scale-95 text-[9px] font-bold uppercase tracking-wider"
+                                                        className="flex items-center gap-1.5 ml-3 px-2.5 py-2 rounded-lg bg-white/[0.03] border border-white/[0.06] text-slate-500 hover:text-amber-400 hover:border-amber-500/20 transition-all active:scale-95 text-[9px] font-bold uppercase tracking-widest"
                                                     >
                                                         <RotateCcw className="w-2.5 h-2.5" />
-                                                        Equal
+                                                        Equalize Distribution
                                                     </button>
                                                 </div>
-                                                <div className="space-y-3">
-                                                    {q.options.map((opt, i) => (
-                                                        <div key={i} className="group">
-                                                            <div className="flex items-center justify-between mb-1.5">
-                                                                <span className="text-xs text-slate-400 truncate max-w-[60%]" title={opt.value}>{opt.value}</span>
-                                                                <span className="text-xs font-mono font-bold text-amber-400/80 tabular-nums">{opt.weight ?? 0}%</span>
+                                                <div className="space-y-4">
+                                                    {q.options.map((opt, i) => {
+                                                        const isTop = opt.weight === Math.max(...q.options.map(o => o.weight ?? 0));
+                                                        return (
+                                                            <div key={i} className={`group p-3 rounded-xl transition-all duration-300 ${isTop ? 'bg-amber-500/[0.03] border border-amber-500/10' : 'bg-transparent border border-transparent hover:border-white/5'}`}>
+                                                                <div className="flex items-center justify-between mb-2">
+                                                                    <div className="flex items-center gap-2 min-w-0">
+                                                                        <span className="text-xs font-semibold text-slate-200 truncate" title={opt.value}>{opt.value}</span>
+                                                                        {isTop && (opt.weight ?? 0) > 30 && (
+                                                                            <span className="flex-shrink-0 px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-[8px] font-bold text-amber-500 uppercase tracking-tighter">
+                                                                                Primary
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-xs font-mono font-bold text-amber-400 tabular-nums">{(opt.weight ?? 0).toFixed(0)}%</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="relative h-2.5 bg-black/40 rounded-full overflow-hidden shadow-[inset_0_1px_3px_rgba(0,0,0,0.4)] border border-white/5">
+                                                                    <div
+                                                                        className="absolute top-0 left-0 h-full rounded-full transition-all duration-500 ease-out"
+                                                                        style={{
+                                                                            width: `${Math.min(opt.weight ?? 0, 100)}%`,
+                                                                            background: `linear-gradient(90deg, #8A701C, #D4AF37)`,
+                                                                            boxShadow: `0 0 10px ${GOLD_COLORS[0]}33`
+                                                                        }}
+                                                                    />
+                                                                    <input
+                                                                        type="range"
+                                                                        min={0}
+                                                                        max={100}
+                                                                        value={opt.weight ?? 0}
+                                                                        step={1}
+                                                                        onChange={(e) => handleWeightChange(q.id, i, Number(e.target.value))}
+                                                                        className="absolute inset-0 w-full h-full cursor-pointer appearance-none bg-transparent opacity-0 z-10"
+                                                                    />
+                                                                </div>
                                                             </div>
-                                                            <div className="relative h-2 bg-white/[0.04] rounded-full overflow-visible">
-                                                                <div
-                                                                    className="absolute top-0 left-0 h-full rounded-full transition-all duration-150"
-                                                                    style={{
-                                                                        width: `${Math.min(opt.weight ?? 0, 100)}%`,
-                                                                        background: 'linear-gradient(90deg, #8A701C, #D4AF37)'
-                                                                    }}
-                                                                />
-                                                                <input
-                                                                    type="range"
-                                                                    min={0}
-                                                                    max={100}
-                                                                    value={opt.weight ?? 0}
-                                                                    onChange={(e) => handleWeightChange(q.id, i, Number(e.target.value))}
-                                                                    className="absolute inset-0 w-full h-full cursor-pointer"
-                                                                    style={{ opacity: 0, zIndex: 2 }}
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    ))}
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
                                         )}
@@ -599,30 +708,41 @@ const Step2Dashboard = React.memo((props: Step2DashboardProps) => {
 
                     {/* Text samples */}
                     {textQuestions.length > 0 && (
-                        <div className="mt-6 space-y-2">
-                            <p className="text-[10px] text-slate-600 uppercase tracking-[0.15em] font-bold px-1 mb-3 font-mono">Text Samples</p>
+                        <div className="mt-8 space-y-3">
+                            <div className="flex items-center gap-2 px-1 mb-2">
+                                <AlignLeft className="w-3 h-3 text-slate-500" />
+                                <p className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold font-mono">Custom Text Samples</p>
+                            </div>
                             {textQuestions.map(q => {
-                                const samples = customResponses[q.id];
+                                const samples = customResponses[q.id] || '';
                                 return (
-                                    <div key={q.id} className="glass-panel rounded-xl p-4">
-                                        <h4 className="text-sm font-medium text-slate-300 mb-2.5 flex items-center gap-2">
-                                            {q.required && <span className="text-amber-500 text-sm">●</span>}
+                                    <div key={q.id} className="glass-panel border-white/[0.05] rounded-2xl p-5 hover:border-white/10 transition-colors">
+                                        <h4 className="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
+                                            {q.required && <span className="text-amber-500 text-sm drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]">●</span>}
                                             {q.title}
                                         </h4>
-                                        {samples ? (
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {samples.split(',').slice(0, 6).map((s, i) => (
-                                                    <span key={i} className="px-2.5 py-1 bg-amber-500/5 text-amber-300/80 text-[10px] rounded-lg border border-amber-500/10 font-medium">
-                                                        {s.trim()}
-                                                    </span>
-                                                ))}
-                                                {samples.split(',').length > 6 && (
-                                                    <span className="px-2 py-1 text-[10px] text-slate-600 font-mono">+{samples.split(',').length - 6}</span>
-                                                )}
+                                        <div className="relative group">
+                                            <textarea
+                                                value={samples}
+                                                onChange={(e) => setCustomResponses({ ...customResponses, [q.id]: e.target.value })}
+                                                placeholder="Enter samples... (e.g. Excellent service, Very fast, Helpful staff)"
+                                                className="w-full h-24 bg-black/40 text-slate-300 text-[11px] p-4 rounded-xl border border-white/[0.08] focus:border-amber-500/40 focus:ring-4 focus:ring-amber-500/5 outline-none resize-none transition-all placeholder:text-slate-700 font-mono leading-relaxed"
+                                            />
+                                            <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                                <PenLine className="w-3 h-3 text-slate-600" />
                                             </div>
-                                        ) : (
-                                            <p className="text-[11px] text-slate-600 italic">Auto-generated responses will be used</p>
-                                        )}
+                                        </div>
+                                        <div className="mt-3 flex justify-between items-center text-[10px] font-mono">
+                                            <div className="flex items-center gap-1.5 text-slate-500">
+                                                <div className={`w-1.5 h-1.5 rounded-full ${samples.trim() ? 'bg-emerald-500/50' : 'bg-slate-700'}`} />
+                                                <span>
+                                                    {samples.trim()
+                                                        ? `${samples.split(',').filter(s => s.trim()).length} responses active`
+                                                        : 'Using AI-generated patterns'}
+                                                </span>
+                                            </div>
+                                            <span className="text-slate-600 bg-white/[0.03] px-2 py-0.5 rounded-md border border-white/[0.05]">Comma Separated</span>
+                                        </div>
                                     </div>
                                 );
                             })}
@@ -631,17 +751,46 @@ const Step2Dashboard = React.memo((props: Step2DashboardProps) => {
 
                     {/* Date / Time / Other fields */}
                     {otherQuestions.length > 0 && (
-                        <div className="mt-6 space-y-2">
-                            <p className="text-[10px] text-slate-600 uppercase tracking-[0.15em] font-bold px-1 mb-3 font-mono">Other Fields</p>
+                        <div className="mt-8 space-y-3">
+                            <div className="flex items-center gap-2 px-1 mb-2">
+                                <Calendar className="w-3 h-3 text-slate-500" />
+                                <p className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold font-mono">System Handled Fields</p>
+                            </div>
                             {otherQuestions.map(q => (
-                                <div key={q.id} className="glass-panel rounded-xl p-4">
-                                    <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2">
-                                        {q.required && <span className="text-amber-500 text-sm">●</span>}
+                                <div key={q.id} className="glass-panel border-white/[0.05] rounded-2xl p-5 hover:border-white/10 transition-colors">
+                                    <h4 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                                        {q.required && <span className="text-amber-500 text-sm drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]">●</span>}
                                         {q.title}
                                     </h4>
-                                    <p className="text-[11px] text-slate-600 mt-1.5 italic">Auto-generated {q.type === QuestionType.DATE ? 'dates' : q.type === QuestionType.TIME ? 'times' : 'responses'} will be used</p>
+                                    <div className="mt-3 flex items-center gap-2 text-[10px] text-slate-500 font-medium">
+                                        <div className="px-2 py-1 rounded-md bg-white/[0.03] border border-white/[0.05] text-amber-500/60 flex items-center gap-1.5">
+                                            <Zap className="w-3 h-3" />
+                                            AUTO-BALANCED {q.type === QuestionType.DATE ? 'DATES' : q.type === QuestionType.TIME ? 'TIMES' : 'INPUTS'}
+                                        </div>
+                                        <span className="italic">Realistic distribution applied</span>
+                                    </div>
                                 </div>
                             ))}
+                        </div>
+                    )}
+
+                    {/* Constraints Visualizer (if active) */}
+                    {constraintsEnabled && analysis.constraints && analysis.constraints.length > 0 && (
+                        <div className="mt-6 glass-panel rounded-xl p-4 border border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.05)]">
+                            <div className="flex items-center gap-2 mb-3">
+                                <ShieldCheck className="w-4 h-4 text-amber-500" />
+                                <h4 className="text-xs font-bold font-mono text-amber-500/90 uppercase tracking-[0.15em]">
+                                    {analysis.constraints.length} Active Logical Constraints
+                                </h4>
+                            </div>
+                            <div className="text-[10px] text-slate-400 leading-relaxed max-h-32 overflow-y-auto pr-2 stylized-scrollbar space-y-2">
+                                {analysis.constraints.map(c => (
+                                    <div key={c.id} className="flex gap-2">
+                                        <span className="text-amber-500/50 mt-0.5">•</span>
+                                        <span dangerouslySetInnerHTML={{ __html: c.description.replace(/\[([^\]]+)\]/g, '<span class="text-amber-400/80 font-mono">[$1]</span>') }} />
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
 

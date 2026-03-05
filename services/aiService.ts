@@ -1,4 +1,5 @@
 import { FormQuestion, FormAnalysis } from '../types';
+import { buildConstraintMap, classifyForm } from './constraintEngine';
 
 // Professional Statistical Analysis Engine - No dependency on external AI APIs
 
@@ -281,11 +282,17 @@ const applyStatisticalAnalysis = (title: string, questions: FormQuestion[]): For
   // Step 2: Apply cross-question dependency logic for common-sense adjustments
   const finalQuestions = applyCrossDependencyLogic(analyzedQuestions);
 
+  // Step 3: Build per-record logical constraint rules for runtime validation
+  const classifiedQuestions = classifyForm(finalQuestions);
+  const constraints = buildConstraintMap(finalQuestions);
+
   return {
     title,
     description: "Statistical Demographic Analysis",
     questions: finalQuestions,
-    aiReasoning: "Advanced demographic distribution models with cross-question dependency analysis applied based on 100+ survey patterns and statistical research."
+    aiReasoning: "Advanced demographic distribution models with cross-question dependency analysis applied based on 100+ survey patterns and statistical research.",
+    constraints,
+    classifiedQuestions
   };
 };
 
