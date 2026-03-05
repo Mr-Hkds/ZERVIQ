@@ -1076,13 +1076,14 @@ function App() {
             try {
                 form.submit();
                 // Since we can't read the response due to CORS, we assume it's sent
-                // if the iframe doesn't trigger an error within 2.5 seconds
+                // if the iframe doesn't trigger an error within this timeout
+                // Increased from 1500ms to 3500ms for reliability with concurrent batch submissions
                 setTimeout(() => {
                     if (!hasError) {
                         cleanup();
                         resolve(true);
                     }
-                }, 1500);
+                }, 3500);
             } catch (e) {
                 console.error("Native Submission Error:", e);
                 cleanup();
@@ -1412,30 +1413,48 @@ function App() {
                         }
                     } else if (q.options.length > 0) {
                         value = q.options[0].value;
-                    } else if ((q.type === 'SHORT_ANSWER' || q.type === 'PARAGRAPH') && q.required) {
-                        // FALLBACK: Required text fields that aren't name/email/phone
-                        // Use aiTextSuggestions if available, otherwise generate a placeholder
-                        if (q.aiTextSuggestions && q.aiTextSuggestions.length > 0) {
-                            value = q.aiTextSuggestions[i % q.aiTextSuggestions.length];
-                        } else {
-                            // Generate contextual fallback based on question title keywords
-                            const titleLower = q.title.toLowerCase();
-                            if (/city|town|place|location|area|district|state|country|address|pin.?code|zip/i.test(titleLower)) {
-                                const cities = ['Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Chennai', 'Kolkata', 'Pune', 'Ahmedabad', 'Jaipur', 'Lucknow', 'Kochi', 'Chandigarh', 'Indore', 'Bhopal', 'Nagpur'];
-                                value = cities[i % cities.length];
-                            } else if (/college|university|institute|school|organisation|organization|company|firm/i.test(titleLower)) {
-                                const institutions = ['Delhi University', 'Mumbai University', 'IIT Delhi', 'Anna University', 'Bangalore University', 'Pune University', 'BITS Pilani', 'VIT Vellore', 'SRM University', 'Amity University'];
-                                value = institutions[i % institutions.length];
-                            } else if (/department|branch|stream|course|subject|field|specialization|major/i.test(titleLower)) {
-                                const departments = ['Computer Science', 'Electronics', 'Mechanical', 'Civil', 'Commerce', 'Arts', 'Science', 'Management', 'Law', 'Medicine'];
-                                value = departments[i % departments.length];
-                            } else if (/year|semester|batch|roll|reg/i.test(titleLower)) {
-                                value = String(2020 + (i % 6));
+                    }
+
+                    // UNIVERSAL FALLBACK: Ensure every question gets a value
+                    // This runs for ANY question type that still has an empty value
+                    if (!value || (typeof value === 'string' && value.trim() === '')) {
+                        if (q.type === 'SHORT_ANSWER' || q.type === 'PARAGRAPH') {
+                            // Text field fallback
+                            if (q.aiTextSuggestions && q.aiTextSuggestions.length > 0) {
+                                value = q.aiTextSuggestions[i % q.aiTextSuggestions.length];
                             } else {
-                                // Generic fallback — short meaningful response
-                                const genericResponses = ['Good', 'Satisfactory', 'Yes', 'Agreed', 'N/A', 'No comment', 'Fine', 'Okay', 'Acceptable', 'Noted'];
-                                value = genericResponses[i % genericResponses.length];
+                                const titleLower = q.title.toLowerCase();
+                                if (/city|town|place|location|area|district|state|country|address|pin.?code|zip/i.test(titleLower)) {
+                                    const cities = ['Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Chennai', 'Kolkata', 'Pune', 'Ahmedabad', 'Jaipur', 'Lucknow', 'Kochi', 'Chandigarh', 'Indore', 'Bhopal', 'Nagpur'];
+                                    value = cities[i % cities.length];
+                                } else if (/college|university|institute|school|organisation|organization|company|firm/i.test(titleLower)) {
+                                    const institutions = ['Delhi University', 'Mumbai University', 'IIT Delhi', 'Anna University', 'Bangalore University', 'Pune University', 'BITS Pilani', 'VIT Vellore', 'SRM University', 'Amity University'];
+                                    value = institutions[i % institutions.length];
+                                } else if (/department|branch|stream|course|subject|field|specialization|major/i.test(titleLower)) {
+                                    const departments = ['Computer Science', 'Electronics', 'Mechanical', 'Civil', 'Commerce', 'Arts', 'Science', 'Management', 'Law', 'Medicine'];
+                                    value = departments[i % departments.length];
+                                } else if (/year|semester|batch|roll|reg/i.test(titleLower)) {
+                                    value = String(2020 + (i % 6));
+                                } else {
+                                    const genericResponses = ['Good', 'Satisfactory', 'Yes', 'Agreed', 'N/A', 'No comment', 'Fine', 'Okay', 'Acceptable', 'Noted'];
+                                    value = genericResponses[i % genericResponses.length];
+                                }
                             }
+                        } else if (q.type === 'DATE') {
+                            // Generate a random date within the last 2 years
+                            const baseDate = new Date(2024, 0, 1);
+                            baseDate.setDate(baseDate.getDate() + (i * 17 + 31) % 730);
+                            value = `${baseDate.getFullYear()}-${String(baseDate.getMonth() + 1).padStart(2, '0')}-${String(baseDate.getDate()).padStart(2, '0')}`;
+                        } else if (q.type === 'TIME') {
+                            const hour = (9 + (i * 3) % 12).toString().padStart(2, '0');
+                            const minute = ((i * 17) % 60).toString().padStart(2, '0');
+                            value = `${hour}:${minute}`;
+                        } else if (q.options.length > 0) {
+                            // Any other type with options — pick one randomly
+                            value = q.options[Math.floor(Math.random() * q.options.length)].value;
+                        } else if (q.required) {
+                            // Absolute last resort for ANY required field
+                            value = 'N/A';
                         }
                     }
 
@@ -1446,22 +1465,23 @@ function App() {
                     submissionData['emailAddress'] = identity.email;
                 }
 
-                // Pre-submission validation: Ensure required fields have valid values
-                const missingFields = analysis.questions
-                    .filter(q => {
-                        if (!q.required) return false;
-                        const val = submissionData[q.entryId];
-                        if (val === undefined || val === null) return true;
-                        if (typeof val === 'string' && val.trim() === '') return true;
-                        if (Array.isArray(val) && val.length === 0) return true;
-                        return false;
-                    })
-                    .map(q => q.title);
+                // Auto-fix any remaining missing required fields
+                // Instead of skipping the entire payload, fill missing fields with safe defaults
+                analysis.questions.forEach(q => {
+                    if (!q.required) return;
+                    const val = submissionData[q.entryId];
+                    const isEmpty = val === undefined || val === null ||
+                        (typeof val === 'string' && val.trim() === '') ||
+                        (Array.isArray(val) && val.length === 0);
 
-                if (missingFields.length > 0) {
-                    pushLog(`Response #${i + 1}: VALIDATION ERROR - Missing: ${missingFields.join(', ')}`, 'ERROR', successCount);
-                    continue;
-                }
+                    if (isEmpty) {
+                        if (q.options.length > 0) {
+                            submissionData[q.entryId] = q.options[0].value;
+                        } else {
+                            submissionData[q.entryId] = 'N/A';
+                        }
+                    }
+                });
 
                 allPayloads.push({ index: i, data: submissionData });
             }
@@ -1469,7 +1489,7 @@ function App() {
             pushLog(`${allPayloads.length} payloads armed. Initiating parallel batch fire...`, 'RUNNING');
 
             // --- PARALLEL BATCH SUBMISSION ---
-            const BATCH_SIZE = 5; // Fire 5 concurrent requests at a time
+            const BATCH_SIZE = 3; // Fire 3 concurrent requests at a time (reduced for reliability)
 
             for (let batchStart = 0; batchStart < allPayloads.length; batchStart += BATCH_SIZE) {
                 if ((window as any).__AF_STOP_SIGNAL) break;
